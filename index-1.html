@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ESP32-S3 · 3D Module Simulator By Alacritic_Super</title>
+<style>
+  :root { --bg:#070b13; --panel:rgba(12,18,28,.74); --line:rgba(255,255,255,.08); --fg:#e6edf3; --muted:#8b98a8; --accent:#37c6ff; --accent2:#ff4fd8; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  #c { position:fixed; inset:0; display:block; }
+  #vignette { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0,0,0,.6) 100%); }
+  .panel { position:fixed; background:var(--panel); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:14px; box-shadow:0 10px 40px rgba(0,0,0,.45); }
+  #title { left:20px; top:20px; padding:14px 18px; max-width:390px; }
+  #title h1 { margin:0 0 4px; font-size:20px; letter-spacing:.3px; }
+  #title h1 span { color:var(--accent); }
+  #title p { margin:0 0 10px; color:var(--muted); font-size:12.5px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:#c9d4e0; }
+  #controls { right:20px; top:20px; width:256px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  #controls h2 { margin:4px 0 0; font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .row label { color:#d5dee8; font-size:13px; }
+  .switch { position:relative; width:38px; height:22px; flex:none; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .switch i { position:absolute; inset:0; background:rgba(255,255,255,.12); border-radius:999px; transition:.2s; cursor:pointer; }
+  .switch i::after { content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; border-radius:50%; background:#fff; transition:.2s; }
+  .switch input:checked + i { background:var(--accent); }
+  .switch input:checked + i::after { transform:translateX(16px); }
+  input[type=range] { width:120px; accent-color:var(--accent); }
+  select, button { background:rgba(255,255,255,.06); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font:inherit; font-size:12.5px; cursor:pointer; }
+  button:hover, select:hover { background:rgba(255,255,255,.12); }
+  .views { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .views button { padding:6px 0; }
+  #serial { left:20px; bottom:20px; width:580px; display:flex; flex-direction:column; overflow:hidden; }
+  #serial header { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); }
+  #serial header .dot { width:8px; height:8px; border-radius:50%; background:#3a4553; transition:.3s; }
+  #serial header .dot.on { background:#3ddc84; box-shadow:0 0 8px #3ddc84; }
+  #serial header .sp { flex:1; }
+  #serial header button { padding:2px 8px; font-size:11px; }
+  #log { height:190px; margin:0; padding:8px 12px; overflow:auto; font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#a8b3c0; white-space:pre-wrap; word-break:break-all; }
+  #serial.collapsed #log { display:none; }
+  #log .i { color:#7fe08a; } #log .w { color:#ffd166; } #log .e { color:#ff6b6b; } #log .rom { color:#6f7f92; } #log .app { color:#8ad8ff; }
+  #tip { position:fixed; pointer-events:none; display:none; padding:8px 11px; border-radius:10px; background:rgba(8,12,20,.92); border:1px solid rgba(55,198,255,.35); font-size:12.5px; max-width:300px; transform:translate(14px,14px); z-index:5; }
+  #tip b { color:var(--accent); display:block; font-size:13px; margin-bottom:2px; }
+  #tip small { color:var(--muted); display:block; margin-top:3px; }
+  #hint { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); color:var(--muted); font-size:12px; pointer-events:none; white-space:nowrap; }
+  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--muted); z-index:10; transition:opacity .6s; font-size:15px; }
+  @media (max-width: 900px) { #serial { width: calc(100vw - 40px); } #title { max-width: calc(100vw - 40px); } #controls { display:none; } #hint { display:none; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<div id="title" class="panel">
+  <h1>ESP32-<span>S3</span> DevKitC-1 · 3D Simulator By Alacritic_Super</h1>
+  <p>Interactive model of the ESP32-S3-WROOM-1 module on its dev board. Hover any part for details, click GPIO pins to toggle them, press RST / BOOT.</p>
+  <div class="chips">
+    <span class="chip">2× Xtensa LX7 @ 240 MHz</span><span class="chip">512 KB SRAM</span><span class="chip">16 MB Flash</span>
+    <span class="chip">8 MB PSRAM</span><span class="chip">Wi-Fi 4 · BLE 5</span><span class="chip">USB-OTG</span><span class="chip">45 GPIO</span>
+  </div>
+</div>
+
+<div id="controls" class="panel">
+  <h2>Board</h2>
+  <div class="row"><label>Power (USB)</label><span class="switch"><input id="power" type="checkbox" checked><i></i></span></div>
+  <div class="row"><label>Open shield can</label><span class="switch"><input id="lid" type="checkbox"><i></i></span></div>
+  <div class="row"><label>Exploded view</label><input id="explode" type="range" min="0" max="1" step="0.01" value="0"></div>
+  <div class="row"><label>RGB LED</label>
+    <select id="ledmode"><option value="rainbow">Rainbow</option><option value="breathe">Breathe</option><option value="off">Off</option></select>
+  </div>
+  <h2>Camera</h2>
+  <div class="row"><label>Auto-rotate</label><span class="switch"><input id="rotate" type="checkbox" checked><i></i></span></div>
+  <div class="views">
+    <button data-view="iso" title="1">Iso</button><button data-view="top" title="2">Top</button>
+    <button data-view="usb" title="3">USB</button><button data-view="ant" title="4">Antenna</button>
+  </div>
+  <button id="shot">Save screenshot</button>
+</div>
+
+<div id="serial" class="panel">
+  <header><span class="dot" id="dot"></span> Serial monitor · 115200 baud <span class="sp"></span><button id="clear">clear</button><button id="collapse">hide</button></header>
+  <pre id="log"></pre>
+</div>
+
+<div id="tip"></div>
+<div id="hint">drag to orbit · wheel to zoom · right-drag to pan · keys 1–4 switch views</div>
+<div id="loading">Loading three.js…</div>
+
+<script>
+  // Fallback message if the CDN is unreachable (module scripts fail silently otherwise).
+  setTimeout(() => { if (!window.__esp32Ready) document.getElementById('loading').textContent =
+    'Could not load three.js from unpkg.com — check your internet connection and reload.'; }, 15000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ------------------------------------------------------------------ */
+/*  Board geometry (all units in millimetres, board top surface = y 0)  */
+/* ------------------------------------------------------------------ */
+const PX = 48;                                   // texture pixels per mm
+const BOARD = { L: 63, W: 25.5, T: 1.6 };
+const PITCH = 2.54, NPINS = 22, ROW_Z = 11.43;
+const PIN_X0 = -((NPINS - 1) / 2) * PITCH;
+const MODULE = { cx: -18.75, cz: 0, len: 25.5, w: 18, t: 0.8 };   // ESP32-S3-WROOM-1
+const CAN = { cx: -15.7, cz: 0, len: 18.4, w: 15.8, h: 2.4 };     // RF shield can
+
+const LAYOUT = {
+  usb: [
+    { x: 28.5, z: 5,  label: 'USB',  title: 'USB-C · native USB-OTG', desc: 'Wired straight to the ESP32-S3 USB PHY on GPIO19 (D-) / GPIO20 (D+). Used for USB-Serial/JTAG, TinyUSB devices and flashing.' },
+    { x: 28.5, z: -5, label: 'UART', title: 'USB-C · UART bridge',    desc: 'Goes through the CP2102N USB-to-UART bridge to U0TXD / U0RXD. Powers the board and drives the auto-reset circuit for flashing.' },
+  ],
+  buttons: [
+    { x: 17, z: 7,  label: 'RST',  title: 'RST button',  desc: 'Pulls EN (CHIP_PU) low. Releasing it reboots the chip. Click to reset the simulated board.' },
+    { x: 17, z: -7, label: 'BOOT', title: 'BOOT button', desc: 'Holds GPIO0 low. If low while EN rises, the ROM enters serial download mode. Click to see it on the monitor.' },
+  ],
+  bridge: { x: 12, z: 0, w: 5, d: 5 },
+  ldo:    { x: 5,  z: 1.5, w: 6.5, d: 3.5 },
+  rgb:    { x: 0,  z: -3.5, w: 5, d: 5 },
+  pwrLed: { x: 20, z: -1.5, w: 1.6, d: 0.8 },
+  caps: [ { x: 7, z: -3 }, { x: 7, z: 4.6 }, { x: 12, z: -4.8 }, { x: 12, z: 4.2 }, { x: 9, z: 7.5 }, { x: -3, z: 7.5 }, { x: 22, z: 2 }, { x: -4.5, z: -1 } ],
+};
+
+// Pin header labels, index 0 = antenna end, index 21 = USB end (ESP32-S3-DevKitC-1 v1.1)
+const LEFT_PINS  = ['3V3','3V3','RST','4','5','6','7','15','16','17','18','8','3','46','9','10','11','12','13','14','5V','G'];
+const RIGHT_PINS = ['G','TX','RX','1','2','42','41','40','39','38','37','36','35','0','45','48','47','21','20','19','G','G'];
+
+const FN = {
+  '3V3': 'Regulated 3.3 V output from the on-board LDO (up to ~500 mA for external circuits).',
+  '5V':  '5 V from USB VBUS. Can also be used to power the board from an external 5 V source.',
+  'G':   'Ground.',
+  'RST': 'EN / CHIP_PU — active-low chip enable, also tied to the RST button.',
+  'TX':  'GPIO43 — U0TXD. UART0 transmit, goes to the USB-UART bridge.',
+  'RX':  'GPIO44 — U0RXD. UART0 receive, comes from the USB-UART bridge.',
+  '0':   'Strapping pin (BOOT). Low at reset → serial download mode. Tied to BOOT button.',
+  '1':   'ADC1_CH0, TOUCH1', '2': 'ADC1_CH1, TOUCH2',
+  '3':   'ADC1_CH2, TOUCH3. Strapping pin: JTAG signal source.',
+  '4':   'ADC1_CH3, TOUCH4', '5': 'ADC1_CH4, TOUCH5', '6': 'ADC1_CH5, TOUCH6', '7': 'ADC1_CH6, TOUCH7',
+  '8':   'ADC1_CH7, TOUCH8, SUBSPICS1', '9': 'ADC1_CH8, TOUCH9, FSPIHD, SUBSPIHD',
+  '10':  'ADC1_CH9, TOUCH10, FSPICS0', '11': 'ADC2_CH0, TOUCH11, FSPID', '12': 'ADC2_CH1, TOUCH12, FSPICLK',
+  '13':  'ADC2_CH2, TOUCH13, FSPIQ', '14': 'ADC2_CH3, TOUCH14, FSPIWP',
+  '15':  'ADC2_CH4, U0RTS, XTAL_32K_P', '16': 'ADC2_CH5, U0CTS, XTAL_32K_N',
+  '17':  'ADC2_CH6, U1TXD', '18': 'ADC2_CH7, U1RXD, CLK_OUT3',
+  '19':  'ADC2_CH8, USB_D-  (native USB)', '20': 'ADC2_CH9, USB_D+  (native USB)',
+  '21':  'General purpose I/O.',
+  '35':  'SPIIO6 — used internally by octal PSRAM on N16R8 modules, avoid.',
+  '36':  'SPIIO7 — used internally by octal PSRAM on N16R8 modules, avoid.',
+  '37':  'SPIDQS — used internally by octal PSRAM on N16R8 modules, avoid.',
+  '38':  'FSPIWP, SUBSPIWP', '39': 'MTCK (JTAG), CLK_OUT3, SUBSPICS1', '40': 'MTDO (JTAG), CLK_OUT2',
+  '41':  'MTDI (JTAG), CLK_OUT1', '42': 'MTMS (JTAG)',
+  '45':  'Strapping pin: selects VDD_SPI voltage (1.8 V / 3.3 V).',
+  '46':  'Strapping pin: ROM message printing. Input-only in practice.',
+  '47':  'SPICLK_P_DIFF', '48': 'SPICLK_N_DIFF — drives the on-board WS2812 RGB LED.',
+};
+const pinTitle = n => /^\d+$/.test(n) ? `GPIO${n}` : ({ G: 'GND', TX: 'TX (GPIO43)', RX: 'RX (GPIO44)', RST: 'RST / EN', '5V': '5V (VBUS)', '3V3': '3V3' })[n] || n;
+
+/* ------------------------------------------------------------------ */
+/*  Renderer, scene, camera                                           */
+/* ------------------------------------------------------------------ */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070b13);
+scene.fog = new THREE.FogExp2(0x070b13, 0.0038);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.5, 700);
+camera.position.set(52, 44, 62);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 10;
+controls.maxDistance = 240;
+controls.maxPolarAngle = Math.PI * 0.74;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.7;
+
+// Lights
+scene.add(new THREE.HemisphereLight(0x8fb3ff, 0x1a1208, 0.5));
+const key = new THREE.DirectionalLight(0xffffff, 2.4);
+key.position.set(35, 70, 30);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 10, far: 220 });
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.03;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x37c6ff, 0.9);  rim.position.set(-50, 20, -40); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xff4fd8, 0.35); fill.position.set(20, 10, -60); scene.add(fill);
+
+// Floor + grid
+const floor = new THREE.Mesh(new THREE.CircleGeometry(180, 64), new THREE.ShadowMaterial({ opacity: 0.5 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -8; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(360, 72, 0x1c2a3d, 0x111a28); grid.position.y = -8.02; scene.add(grid);
+
+// Post-processing (MSAA target + bloom for the LEDs)
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
+  innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }));
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 1.7);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ------------------------------------------------------------------ */
+/*  Materials & texture helpers                                        */
+/* ------------------------------------------------------------------ */
+const MSM = THREE.MeshStandardMaterial;
+const M = {
+  gold:    new MSM({ color: 0xd9b45a, metalness: 1, roughness: 0.32, envMapIntensity: 0.8 }),
+  steel:   new MSM({ color: 0xb9bec4, metalness: 0.95, roughness: 0.34, envMapIntensity: 0.7 }),
+  black:   new MSM({ color: 0x141416, roughness: 0.55, metalness: 0.1 }),
+  chip:    new MSM({ color: 0x0c0d10, roughness: 0.45, metalness: 0.15 }),
+  pcbEdge: new MSM({ color: 0x1a1d1a, roughness: 0.7 }),
+  tan:     new MSM({ color: 0xc9b48c, roughness: 0.5 }),
+  white:   new MSM({ color: 0xf2f2f2, roughness: 0.4 }),
+  tongue:  new MSM({ color: 0x2a2c30, roughness: 0.6 }),
+};
+
+const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.round(w); c.height = Math.round(h); return c; };
+const tex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t; };
+const rng = seed => () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+
+function drawBoardTop() {
+  const w = BOARD.L * PX, h = BOARD.W * PX;
+  const c = makeCanvas(w, h), g = c.getContext('2d');
+  const X = x => (x + BOARD.L / 2) * PX, Z = z => (z + BOARD.W / 2) * PX;
+  g.fillStyle = '#0c0f13'; g.fillRect(0, 0, w, h);
+
+  // faint copper traces under the solder mask
+  const r = rng(7);
+  g.strokeStyle = 'rgba(255,255,255,0.045)'; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (let i = 0; i < 110; i++) {
+    let x = r() * w, y = r() * h; g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 4; k++) { const dir = Math.floor(r() * 8) * Math.PI / 4, len = 60 + r() * 320; x += Math.cos(dir) * len; y += Math.sin(dir) * len; g.lineTo(x, y); }
+    g.stroke();
+  }
+  g.fillStyle = 'rgba(201,162,74,0.35)';
+  for (let i = 0; i < 160; i++) { g.beginPath(); g.arc(r() * w, r() * h, 5, 0, Math.PI * 2); g.fill(); }
+
+  // header pads
+  for (const side of [-1, 1]) for (let i = 0; i < NPINS; i++) {
+    const x = X(PIN_X0 + i * PITCH), y = Z(side * ROW_Z);
+    g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(x, y, 0.95 * PX, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0c0f13'; g.beginPath(); g.arc(x, y, 0.45 * PX, 0, Math.PI * 2); g.fill();
+  }
+
+  // silkscreen helpers
+  const text = (s, x, z, size, o = {}) => {
+    g.save(); g.fillStyle = o.color || '#e8ecef';
+    g.font = `${o.weight || '600'} ${Math.round(size * PX)}px ${o.font || 'system-ui, Segoe UI, sans-serif'}`;
+    g.textAlign = o.align || 'left'; g.textBaseline = 'middle';
+    g.translate(X(x), Z(z)); if (o.rot) g.rotate(o.rot); g.fillText(s, 0, 0); g.restore();
+  };
+  const outline = (x, z, w_, d) => { g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.strokeRect(X(x - w_ / 2), Z(z - d / 2), w_ * PX, d * PX); };
+
+  for (let i = 0; i < NPINS; i++) {
+    const x = PIN_X0 + i * PITCH;
+    text(LEFT_PINS[i],  x, -9.1, 1.05, { align: 'center', rot: -Math.PI / 2, weight: '700' });
+    text(RIGHT_PINS[i], x,  9.1, 1.05, { align: 'center', rot: -Math.PI / 2, weight: '700' });
+  }
+  outline(MODULE.cx, MODULE.cz, MODULE.len, MODULE.w);
+  for (const u of LAYOUT.usb) { outline(u.x, u.z, 8.9, 7.3); text(u.label, 23.2, u.z, 0.85, { align: 'center', rot: -Math.PI / 2 }); }
+  for (const b of LAYOUT.buttons) { outline(b.x, b.z, 6, 6); text(b.label, b.x, b.z - Math.sign(b.z) * 3.8, 0.95, { align: 'center' }); }
+  outline(LAYOUT.bridge.x, LAYOUT.bridge.z, 5.3, 5.3);
+  outline(LAYOUT.ldo.x, LAYOUT.ldo.z, 6.8, 3.8);
+  outline(LAYOUT.rgb.x, LAYOUT.rgb.z, 5.3, 5.3); text('RGB', LAYOUT.rgb.x, LAYOUT.rgb.z + 3.4, 0.75, { align: 'center' });
+  text('PWR', LAYOUT.pwrLed.x + 1.3, LAYOUT.pwrLed.z, 0.7);
+  for (const cp of LAYOUT.caps) outline(cp.x, cp.z, 2.3, 1.5);
+  text('ESP32-S3-DevKitC-1', -5, -7.2, 1.3, { weight: '700' });
+  text('v1.1', 10.6, -7.2, 0.85, { color: '#9fb3c8' });
+  text('ESPRESSIF', -5, 5.9, 1.15, { weight: '900', font: '"Arial Black", Arial, sans-serif', color: '#e23b3b' });
+  text('esp32-3d · simulator', 4.6, 5.9, 0.7, { color: '#9fb3c8' });
+  return c;
+}
+
+function drawBoardBottom() {
+  const w = BOARD.L * PX, h = BOARD.W * PX;
+  const c = makeCanvas(w, h), g = c.getContext('2d');
+  const X = x => (x + BOARD.L / 2) * PX, Z = z => (z + BOARD.W / 2) * PX;
+  g.fillStyle = '#0c0f13'; g.fillRect(0, 0, w, h);
+  const r = rng(21);
+  g.strokeStyle = 'rgba(255,255,255,0.05)'; g.lineWidth = 3; g.lineCap = 'round';
+  for (let i = 0; i < 90; i++) {
+    let x = r() * w, y = r() * h; g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 3; k++) { const dir = Math.floor(r() * 8) * Math.PI / 4, len = 80 + r() * 300; x += Math.cos(dir) * len; y += Math.sin(dir) * len; g.lineTo(x, y); }
+    g.stroke();
+  }
+  for (const side of [-1, 1]) for (let i = 0; i < NPINS; i++) {
+    const x = X(PIN_X0 + i * PITCH), y = Z(side * ROW_Z);
+    g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(x, y, 0.95 * PX, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0c0f13'; g.beginPath(); g.arc(x, y, 0.45 * PX, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = '#e8ecef'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.font = `700 ${Math.round(1.6 * PX)}px system-ui, sans-serif`; g.fillText('ESP32-S3-DevKitC-1  ·  v1.1', X(0), Z(-3));
+  g.font = `500 ${Math.round(0.9 * PX)}px system-ui, sans-serif`; g.fillStyle = '#9fb3c8';
+  g.fillText('esp32-3d simulator  ·  not for flight, only for looking at', X(0), Z(0));
+  g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 3; g.strokeRect(X(-8), Z(3), 16 * PX, 5 * PX);
+  return c;
+}
+
+function drawModuleTop() {
+  const w = MODULE.len * PX, h = MODULE.w * PX;
+  const c = makeCanvas(w, h), g = c.getContext('2d');
+  const X = x => (x + MODULE.len / 2) * PX, Z = z => (z + MODULE.w / 2) * PX;
+  g.fillStyle = '#0e1216'; g.fillRect(0, 0, w, h);
+  // meander PCB antenna in the first ~6.5 mm
+  g.strokeStyle = '#a58a5a'; g.lineWidth = 0.55 * PX; g.lineCap = 'butt'; g.lineJoin = 'miter';
+  g.beginPath();
+  const x0 = -12.75 + 0.9, zTop = -7.6, zBot = 7.6, n = 6, step = 0.95;
+  g.moveTo(X(x0), Z(0)); g.lineTo(X(x0), Z(zTop));
+  for (let k = 0; k < n; k++) {
+    const xa = x0 + k * step, xb = x0 + (k + 1) * step;
+    const zFrom = k % 2 === 0 ? zTop : zBot, zTo = k % 2 === 0 ? zBot : zTop;
+    g.lineTo(X(xa), Z(zTo)); g.lineTo(X(xb), Z(zTo));
+    if (k === n - 1) g.lineTo(X(xb), Z(zFrom));
+  }
+  g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = `600 ${Math.round(0.7 * PX)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.save(); g.translate(X(-12.75 + 3.5), Z(8.4)); g.fillText('2.4 GHz ANT', 0, 0); g.restore();
+  // castellated pads along the edges
+  g.fillStyle = '#c9a24a';
+  for (let x = -5.5; x <= 12.2; x += 1.5) { g.fillRect(X(x) - 0.45 * PX, 0, 0.9 * PX, 1.5 * PX); g.fillRect(X(x) - 0.45 * PX, h - 1.5 * PX, 0.9 * PX, 1.5 * PX); }
+  for (let z = -7.5; z <= 7.5; z += 1.5) g.fillRect(w - 1.5 * PX, Z(z) - 0.45 * PX, 1.5 * PX, 0.9 * PX);
+  return c;
+}
+
+function drawCanTop() {
+  const w = CAN.len * PX, h = CAN.w * PX;
+  const c = makeCanvas(w, h), g = c.getContext('2d');
+  g.fillStyle = '#b4b9bf'; g.fillRect(0, 0, w, h);
+  const r = rng(3);
+  for (let i = 0; i < 700; i++) {
+    const y = r() * h;
+    g.strokeStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},${(0.03 + r() * 0.08).toFixed(3)})`;
+    g.lineWidth = 1 + r() * 2; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y + (r() - 0.5) * 4); g.stroke();
+  }
+  g.strokeStyle = 'rgba(0,0,0,.28)'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+  g.fillStyle = '#23272b'; g.textBaseline = 'top'; g.textAlign = 'left';
+  g.font = `900 ${Math.round(1.6 * PX)}px "Arial Black", Arial, sans-serif`; g.fillText('espressif', 1.4 * PX, 1.4 * PX);
+  g.font = `700 ${Math.round(1.05 * PX)}px Arial, sans-serif`; g.fillText('ESP32-S3-WROOM-1', 1.4 * PX, 4.0 * PX);
+  g.font = `600 ${Math.round(0.95 * PX)}px Arial, sans-serif`; g.fillText('N16R8', 1.4 * PX, 5.6 * PX);
+  g.font = `500 ${Math.round(0.68 * PX)}px Arial, sans-serif`;
+  g.fillText('Wi-Fi 4 · Bluetooth 5 (LE)', 1.4 * PX, 7.2 * PX);
+  g.fillText('16 MB quad flash · 8 MB octal PSRAM', 1.4 * PX, 8.3 * PX);
+  // QR-ish block
+  const q = 4 * PX, qx = w - q - 1.4 * PX, qy = 1.4 * PX, n = 13, s = q / n, rq = rng(11);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const corner = (i < 3 && j < 3) || (i < 3 && j > n - 4) || (i > n - 4 && j < 3);
+    const ring = corner && (i % (n - 1) === 0 || j % (n - 1) === 0 || i === 2 || j === 2 || i === n - 3 || j === n - 3 || i === 1 && j === 1);
+    if ((corner && !((i === 1 || i === n - 2) && (j === 1 || j === n - 2)) && ring) || (!corner && rq() < 0.45)) g.fillRect(qx + i * s, qy + j * s, s, s);
+  }
+  g.font = `700 ${Math.round(1.0 * PX)}px Arial, sans-serif`; g.textBaseline = 'bottom'; g.fillText('CE   FCC   UKCA', 1.4 * PX, h - 1.3 * PX);
+  g.textAlign = 'right'; g.font = `500 ${Math.round(0.65 * PX)}px Arial, sans-serif`; g.fillText('esp32-3d · simulated part', w - 1.4 * PX, h - 1.3 * PX);
+  return c;
+}
+
+function labelTex(lines, wmm, dmm, o = {}) {
+  const S = PX * (o.scale || 2);
+  const c = makeCanvas(Math.max(64, wmm * S), Math.max(64, dmm * S)), g = c.getContext('2d');
+  g.fillStyle = o.bg || '#0d0e11'; g.fillRect(0, 0, c.width, c.height);
+  const grad = g.createLinearGradient(0, 0, c.width, c.height);
+  grad.addColorStop(0, 'rgba(255,255,255,.07)'); grad.addColorStop(1, 'rgba(0,0,0,.12)');
+  g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+  const longest = Math.max(...lines.map(l => l.length));
+  const fs = Math.min(c.width / (longest * 0.66), c.height / (lines.length * 2.1));
+  g.fillStyle = o.fg || '#c9ced4'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `600 ${fs}px ui-monospace, Consolas, monospace`;
+  lines.forEach((l, i) => g.fillText(l, c.width / 2, c.height / 2 + (i - (lines.length - 1) / 2) * fs * 1.4));
+  if (o.dot !== false) { g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(c.width * 0.1, c.height * 0.12, Math.min(c.width, c.height) * 0.05, 0, Math.PI * 2); g.fill(); }
+  return tex(c);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mesh builders                                                      */
+/* ------------------------------------------------------------------ */
+function box(w, h, d, mat, p = {}) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(p.x || 0, p.y ?? h / 2, p.z || 0);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+function labeledBox(w, h, d, lines, p, info, o = {}) {
+  const top = new MSM({ map: labelTex(lines, w, d, o), roughness: 0.45, metalness: 0.15 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [M.chip, M.chip, top, M.chip, M.chip, M.chip]);
+  m.position.set(p.x || 0, p.y ?? h / 2, p.z || 0);
+  m.castShadow = m.receiveShadow = true;
+  if (info) m.userData.info = info;
+  return m;
+}
+const setInfo = (obj, info) => obj.traverse(o => { if (o.isMesh) o.userData.info = info; });
+
+// Explodable parts registry
+const parts = [];
+function register(obj, explodeH) {
+  obj.userData.baseY = obj.position.y; obj.userData.explodeH = explodeH;
+  parts.push(obj); scene.add(obj); return obj;
+}
+
+// --- Main PCB
+const board = new THREE.Mesh(new THREE.BoxGeometry(BOARD.L, BOARD.T, BOARD.W), [
+  M.pcbEdge, M.pcbEdge,
+  new MSM({ map: tex(drawBoardTop()), roughness: 0.6, metalness: 0.05 }),
+  new MSM({ map: tex(drawBoardBottom()), roughness: 0.6, metalness: 0.05 }),
+  M.pcbEdge, M.pcbEdge]);
+board.position.y = -BOARD.T / 2;
+board.castShadow = board.receiveShadow = true;
+board.userData.info = { title: 'ESP32-S3-DevKitC-1 v1.1', desc: '63 × 25.5 mm, 1.6 mm FR-4 PCB, 2 × 22 pin headers at 2.54 mm pitch. Breadboard-friendly.' };
+scene.add(board);
+
+// --- ESP32-S3-WROOM-1 module (PCB, silicon, shield can)
+const moduleG = new THREE.Group();
+moduleG.position.set(MODULE.cx, 0, MODULE.cz);
+const modPcb = new THREE.Mesh(new THREE.BoxGeometry(MODULE.len, MODULE.t, MODULE.w),
+  [M.pcbEdge, M.pcbEdge, new MSM({ map: tex(drawModuleTop()), roughness: 0.6 }), M.pcbEdge, M.pcbEdge, M.pcbEdge]);
+modPcb.position.y = MODULE.t / 2; modPcb.castShadow = modPcb.receiveShadow = true;
+modPcb.userData.info = { title: 'PCB meander antenna', desc: 'On-module 2.4 GHz antenna etched into the PCB. The area around it is a keep-out zone: no copper, metal or plastic should sit nearby.' };
+moduleG.add(modPcb);
+
+const cx = CAN.cx - MODULE.cx;          // can centre relative to module
+const die = labeledBox(7, 0.9, 7, ['ESP32-S3', 'Xtensa LX7', 'dual-core'], { x: cx - 3.4, y: MODULE.t + 0.45, z: -0.6 },
+  { title: 'ESP32-S3 SoC', desc: 'Dual-core Xtensa LX7 @ 240 MHz, 512 KB SRAM, 384 KB ROM, Wi-Fi 4 (802.11 b/g/n), Bluetooth 5 LE, USB-OTG, vector instructions for AI/DSP.' });
+const flash = labeledBox(8, 1.0, 6, ['16 MB', 'QSPI FLASH'], { x: cx + 4.6, y: MODULE.t + 0.5, z: -3.9 },
+  { title: '16 MB NOR flash', desc: 'Quad-SPI flash on the internal SPI0/1 bus. Holds bootloader, partition table and the application.' });
+const psram = labeledBox(6, 1.0, 5, ['8 MB', 'OPI PSRAM'], { x: cx + 4.6, y: MODULE.t + 0.5, z: 4.2 },
+  { title: '8 MB octal PSRAM', desc: 'Memory-mapped external RAM at 80 MHz. Uses GPIO35–37 internally, which is why those pins are not free on N16R8 modules.' });
+const xtal = box(3.2, 0.9, 2.5, M.steel, { x: cx - 3.4, y: MODULE.t + 0.45, z: 5.6 });
+xtal.userData.info = { title: '40 MHz crystal', desc: 'Main clock reference for the SoC PLLs and radio.' };
+moduleG.add(die, flash, psram, xtal);
+for (const [px, pz, l] of [[-7.2, -5.5, 1.0], [-7.2, -3.8, 1.0], [-7.2, 4.5, 1.6], [0.6, 6.2, 1.0], [2.0, 6.2, 1.0], [7.6, 0.2, 1.6], [-1.2, -6.4, 1.0], [4.2, -0.4, 0.6]]) {
+  const p = box(l, 0.5, 0.5, l > 1.2 ? M.tan : M.black, { x: cx + px, y: MODULE.t + 0.25, z: pz });
+  p.userData.info = { title: 'Passive component', desc: 'Decoupling / RF matching network inside the shield.' };
+  moduleG.add(p);
+}
+const can = new THREE.Mesh(new THREE.BoxGeometry(CAN.len, CAN.h, CAN.w),
+  [M.steel, M.steel, new MSM({ map: tex(drawCanTop()), metalness: 0.9, roughness: 0.4, envMapIntensity: 0.65 }), M.steel, M.steel, M.steel]);
+can.position.set(cx, MODULE.t + CAN.h / 2, 0);
+can.castShadow = can.receiveShadow = true;
+can.userData.info = { title: 'ESP32-S3-WROOM-1-N16R8', desc: 'RF shield can over the SoC, flash, PSRAM and crystal. Flip "Open shield can" to look inside.' };
+const canBaseY = can.position.y;
+moduleG.add(can);
+register(moduleG, 12);
+
+// --- Pin headers
+const pinGeo = new THREE.BoxGeometry(0.64, 8.4, 0.64);
+const pinMeshes = [];
+for (const side of [-1, 1]) {
+  const g = new THREE.Group(); g.position.set(0, 0, side * ROW_Z);
+  const plastic = box(NPINS * PITCH, 2.54, 2.54, M.black, { y: 1.27 });
+  plastic.userData.info = { title: side < 0 ? 'Header J1' : 'Header J3', desc: '22-pin male header, 2.54 mm pitch. Pins point down for breadboard use.' };
+  g.add(plastic);
+  for (let i = 0; i < NPINS; i++) {
+    const pin = new THREE.Mesh(pinGeo, M.gold.clone());
+    pin.position.set(PIN_X0 + i * PITCH, -1.0, 0);
+    pin.castShadow = true;
+    const name = side < 0 ? LEFT_PINS[i] : RIGHT_PINS[i];
+    pin.userData.info = { kind: 'pin', name, title: pinTitle(name), desc: FN[name] || '', gpio: /^\d+$/.test(name) ? +name : null };
+    pinMeshes.push(pin); g.add(pin);
+  }
+  register(g, 7);
+}
+
+// --- USB-C connectors
+for (const u of LAYOUT.usb) {
+  const g = new THREE.Group(); g.position.set(u.x, 0, u.z);
+  const shell = new THREE.Mesh(new RoundedBoxGeometry(8.9, 3.2, 7.3, 4, 1.2), M.steel);
+  shell.position.y = 1.6; shell.castShadow = shell.receiveShadow = true;
+  const cavity = box(1.2, 2.3, 6.2, M.chip, { x: 8.9 / 2 - 0.5, y: 1.6 });
+  const tongue = box(1.1, 0.7, 5.2, M.tongue, { x: 8.9 / 2 - 0.4, y: 1.6 });
+  g.add(shell, cavity, tongue);
+  setInfo(g, { title: u.title, desc: u.desc });
+  register(g, 9);
+}
+
+// --- Tactile buttons
+const buttons = {};
+for (const b of LAYOUT.buttons) {
+  const g = new THREE.Group(); g.position.set(b.x, 0, b.z);
+  const base = box(6, 1.8, 6, M.black, { y: 0.9 });
+  const lid = box(6, 0.35, 6, M.steel, { y: 1.8 + 0.175 });
+  const plunger = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 1.5, 32), M.black);
+  plunger.position.y = 2.15 + 0.75; plunger.castShadow = true;
+  g.add(base, lid, plunger);
+  g.userData.plunger = plunger; g.userData.pressY = plunger.position.y; g.userData.press = 0;
+  setInfo(g, { kind: 'button', name: b.label, title: b.title, desc: b.desc });
+  buttons[b.label] = g;
+  register(g, 8);
+}
+
+// --- USB-UART bridge, LDO
+register(labeledBox(LAYOUT.bridge.w, 0.9, LAYOUT.bridge.d, ['CP2102N', 'USB·UART'], { x: LAYOUT.bridge.x, z: LAYOUT.bridge.z },
+  { title: 'CP2102N USB-to-UART bridge', desc: 'Converts USB to UART0 (TX/RX). Its DTR/RTS lines drive the auto-program circuit that toggles EN and GPIO0 during flashing.' }), 6);
+const ldoG = new THREE.Group(); ldoG.position.set(LAYOUT.ldo.x, 0, LAYOUT.ldo.z);
+ldoG.add(labeledBox(6.5, 1.6, 3.5, ['LDO 3V3'], { x: 0, z: 0 }));
+ldoG.add(box(2.6, 0.5, 1.4, M.steel, { x: 0, y: 0.25, z: 2.3 }));
+for (const zz of [-1.9, 0, 1.9]) ldoG.add(box(0.7, 0.4, 1.2, M.steel, { x: zz, y: 0.2, z: -2.2 }));
+setInfo(ldoG, { title: '3.3 V LDO regulator', desc: 'SOT-223 low-dropout regulator: 5 V USB → 3.3 V for the module and the 3V3 header pins.' });
+register(ldoG, 6);
+
+// --- RGB LED (WS2812, GPIO48) and power LED
+const rgbG = new THREE.Group(); rgbG.position.set(LAYOUT.rgb.x, 0, LAYOUT.rgb.z);
+const ledMat = new MSM({ color: 0x1a1a1a, emissive: 0x000000, emissiveIntensity: 0, roughness: 0.3 });
+const lensMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.7, roughness: 0.12, thickness: 0.6, transparent: true, opacity: 0.8, ior: 1.5 });
+rgbG.add(box(5, 1.4, 5, M.white, { y: 0.7 }));
+rgbG.add(box(1.6, 0.3, 1.6, ledMat, { y: 1.45 }));
+const lens = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.5, 4.4), lensMat); lens.position.y = 1.65; lens.castShadow = false; rgbG.add(lens);
+const ledLight = new THREE.PointLight(0xffffff, 0, 14, 2); ledLight.position.y = 3.5; rgbG.add(ledLight);
+setInfo(rgbG, { title: 'WS2812 addressable RGB LED', desc: 'Driven from GPIO48 (RMT peripheral). Change its animation in the panel on the right.' });
+register(rgbG, 10);
+
+const pwrMat = new MSM({ color: 0x5a0a0a, emissive: 0xff2a1a, emissiveIntensity: 0, roughness: 0.4 });
+const pwr = box(LAYOUT.pwrLed.w, 0.6, LAYOUT.pwrLed.d, pwrMat, { x: LAYOUT.pwrLed.x, z: LAYOUT.pwrLed.z });
+pwr.userData.info = { title: 'Power LED', desc: 'Red LED on the 3V3 rail: lit whenever the board is powered.' };
+register(pwr, 5);
+
+// --- Decoupling caps
+LAYOUT.caps.forEach((cp, i) => {
+  const g = new THREE.Group(); g.position.set(cp.x, 0, cp.z);
+  g.add(box(2.0, 0.9, 1.25, i % 3 === 2 ? M.black : M.tan, { y: 0.45 }));
+  g.add(box(0.45, 0.95, 1.3, M.steel, { x: -0.85, y: 0.475 }), box(0.45, 0.95, 1.3, M.steel, { x: 0.85, y: 0.475 }));
+  setInfo(g, { title: i % 3 === 2 ? '0805 resistor' : '0805 capacitor', desc: i % 3 === 2 ? 'Pull-up / series resistor for the strapping and reset circuit.' : 'Decoupling capacitor keeping the supply rails quiet.' });
+  register(g, 5);
+});
+
+/* ------------------------------------------------------------------ */
+/*  Serial monitor & simulated firmware                                */
+/* ------------------------------------------------------------------ */
+const logEl = document.getElementById('log'), dot = document.getElementById('dot');
+let powered = false, booted = false, bootT0 = 0, timers = [];
+const pinState = {};
+
+const BOOT_LOG = [
+  'ESP-ROM:esp32s3-20210327', 'Build:Mar 27 2021', 'rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)', 'SPIWP:0xee',
+  'mode:DIO, clock div:1', 'load:0x3fce3808,len:0x44c', 'load:0x403c9700,len:0xbd8', 'load:0x403cc700,len:0x2a0c', 'entry 0x403c98d0',
+  'I (25) boot: ESP-IDF v5.2.1 2nd stage bootloader', 'I (25) boot: compile time Sep 11 2026 09:41:07', 'I (25) boot: Multicore bootloader',
+  'I (28) boot: chip revision: v0.2', 'I (33) boot.esp32s3: Boot SPI Speed : 80MHz', 'I (38) boot.esp32s3: SPI Mode       : DIO',
+  'I (42) boot.esp32s3: SPI Flash Size : 16MB', 'I (47) boot: Enabling RNG early entropy source...', 'I (53) boot: Partition Table:',
+  'I (56) boot: ## Label            Usage          Type ST Offset   Length',
+  'I (63) boot:  0 nvs              WiFi data        01 02 00009000 00006000',
+  'I (71) boot:  1 phy_init         RF data          01 01 0000f000 00001000',
+  'I (78) boot:  2 factory          factory app      00 00 00010000 00100000',
+  'I (86) boot: End of partition table',
+  'I (90) esp_image: segment 0: paddr=00010020 vaddr=3c020020 size=0a5f4h ( 42484) map',
+  'I (105) esp_image: segment 1: paddr=0001a61c vaddr=3fc92c00 size=02a2ch ( 10796) load',
+  'I (108) esp_image: segment 2: paddr=0001d050 vaddr=40374000 size=02fc8h ( 12232) load',
+  'I (114) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=1a3d0h (107472) map',
+  'I (140) esp_image: segment 4: paddr=0003a3f8 vaddr=40376fc8 size=0c1a4h ( 49572) load',
+  'I (158) boot: Loaded app from partition at offset 0x10000', 'I (158) boot: Disabling RNG early entropy source...',
+  'I (170) cpu_start: Multicore app', 'I (170) octal_psram: vendor id    : 0x0d (AP)', 'I (170) octal_psram: dev id       : 0x02 (generation 3)',
+  'I (173) octal_psram: density      : 0x03 (64 Mbit)', 'I (183) esp_psram: Found 8MB PSRAM device', 'I (183) esp_psram: Speed: 80MHz',
+  'I (250) cpu_start: Pro cpu up.', 'I (250) cpu_start: Starting app cpu, entry point is 0x403754f8', 'I (0) cpu_start: App cpu up.',
+  'I (450) esp_psram: SPI SRAM memory test OK', 'I (459) cpu_start: Pro cpu start user code', 'I (459) cpu_start: cpu freq: 240000000 Hz',
+  'I (459) cpu_start: Application information:', 'I (462) cpu_start: Project name:     esp32-3d-sim', 'I (467) cpu_start: App version:      1.0.0',
+  'I (472) cpu_start: ESP-IDF:          v5.2.1', 'I (477) heap_init: Initializing. RAM available for dynamic allocation:',
+  'I (484) heap_init: At 3FC98E60 len 00050850 (322 KiB): RAM', 'I (490) heap_init: At 3FCE9700 len 00005F10 (23 KiB): RAM',
+  'I (496) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator', 'I (503) spi_flash: detected chip: generic',
+  'I (508) spi_flash: flash io: dio', 'I (512) sleep: Configure to isolate all GPIO pins in sleep state',
+  'I (518) sleep: Enable automatic switching of GPIO sleep configuration', 'I (526) main_task: Started on CPU0', 'I (536) main_task: Calling app_main()',
+];
+
+function classify(line) {
+  if (/^I \(/.test(line)) return /\) (app|rgb_led|gpio|button):/.test(line) ? 'app' : 'i';
+  if (/^W \(/.test(line)) return 'w';
+  if (/^E \(/.test(line)) return 'e';
+  return 'rom';
+}
+function appendLine(line, cls) {
+  const span = document.createElement('span');
+  span.className = cls || classify(line);
+  span.textContent = line + '\n';
+  logEl.appendChild(span);
+  while (logEl.childNodes.length > 400) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+const uptime = () => booted ? Math.round(performance.now() - bootT0) + 540 : 0;
+const appLog = (tag, msg, lvl = 'I') => appendLine(`${lvl} (${uptime()}) ${tag}: ${msg}`);
+const clearTimers = () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; };
+
+function boot() {
+  clearTimers();
+  powered = true; booted = false; dot.classList.add('on');
+  let t = 0;
+  BOOT_LOG.forEach((ln, i) => {
+    t += i === 0 ? 250 : 14 + Math.random() * 38;
+    if (ln.startsWith('entry')) t += 380;
+    if (ln.startsWith('I (250) cpu_start: Pro')) t += 200;
+    timers.push(setTimeout(() => appendLine(ln), t));
+  });
+  timers.push(setTimeout(() => {
+    booted = true; bootT0 = performance.now();
+    appLog('app', 'Hello from ESP32-S3! 2× Xtensa LX7 @ 240 MHz, free heap 8607 KB');
+    appLog('rgb_led', 'WS2812 on GPIO48 ready, mode=' + ledModeEl.value);
+    appLog('app', 'Hover a pin to read its function, click a GPIO to toggle it');
+    timers.push(setInterval(() => appLog('app', `heartbeat · free heap ${8590000 + Math.floor(Math.random() * 12000)} B · die ${(38 + Math.random() * 4).toFixed(1)} °C`), 7000));
+  }, t + 220));
+}
+function shutdown() {
+  clearTimers();
+  powered = false; booted = false; dot.classList.remove('on');
+  for (const k in pinState) pinState[k] = false;
+  appendLine('— USB power removed —', 'w');
+}
+function resetChip() {
+  if (!powered) return;
+  appendLine('rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)  ← EN pulsed low', 'w');
+  for (const k in pinState) pinState[k] = false;
+  boot();
+}
+
+/* ------------------------------------------------------------------ */
+/*  UI wiring                                                          */
+/* ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+const ledModeEl = $('ledmode');
+let explodeTarget = 0, explodeCur = 0, lidTarget = 0, lidCur = 0;
+
+$('power').addEventListener('change', e => e.target.checked ? boot() : shutdown());
+$('lid').addEventListener('change', e => { lidTarget = e.target.checked ? 1 : 0; });
+$('explode').addEventListener('input', e => { explodeTarget = +e.target.value; });
+$('rotate').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
+ledModeEl.addEventListener('change', () => { if (booted) appLog('rgb_led', 'mode changed → ' + ledModeEl.value); });
+$('clear').addEventListener('click', () => { logEl.textContent = ''; });
+$('collapse').addEventListener('click', e => { const s = $('serial'); s.classList.toggle('collapsed'); e.target.textContent = s.classList.contains('collapsed') ? 'show' : 'hide'; });
+$('shot').addEventListener('click', () => {
+  composer.render();
+  const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = 'esp32-s3-devkitc-1.png'; a.click();
+});
+
+const VIEWS = {
+  iso: { pos: [52, 44, 62], tgt: [0, 0, 0] },
+  top: { pos: [0.01, 92, 0.01], tgt: [0, 0, 0] },
+  usb: { pos: [72, 16, 8], tgt: [12, 0, 0] },
+  ant: { pos: [-62, 24, 34], tgt: [-14, 0, 0] },
+};
+let camAnim = null;
+function flyTo(v) {
+  camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: new THREE.Vector3(...v.pos), t1: new THREE.Vector3(...v.tgt), start: performance.now(), dur: 1100, rot: controls.autoRotate };
+  controls.autoRotate = false;
+}
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => flyTo(VIEWS[b.dataset.view])));
+addEventListener('keydown', e => {
+  const map = { '1': 'iso', '2': 'top', '3': 'usb', '4': 'ant' };
+  if (map[e.key]) flyTo(VIEWS[map[e.key]]);
+  if (e.key === 'r' || e.key === 'R') pressButton('RST');
+  if (e.key === 'b' || e.key === 'B') pressButton('BOOT');
+});
+
+/* ------------------------------------------------------------------ */
+/*  Picking: hover tooltips, pin toggles, button presses               */
+/* ------------------------------------------------------------------ */
+const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+const tip = $('tip');
+const interactives = [];
+scene.traverse(o => { if (o.isMesh && o.userData.info) interactives.push(o); });
+let hovered = null, downPos = null;
+
+function pick(ev) {
+  pointer.set((ev.clientX / innerWidth) * 2 - 1, -(ev.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(interactives, false)[0];
+  return hit ? hit.object : null;
+}
+function showTip(obj, ev) {
+  const info = obj.userData.info;
+  let extra = '';
+  if (info.kind === 'pin' && info.gpio !== null) extra = `<small>${pinState[info.gpio] ? '● HIGH' : '○ LOW'} · click to toggle${powered ? '' : ' (power the board first)'}</small>`;
+  if (info.kind === 'button') extra = `<small>click to press · key ${info.name === 'RST' ? 'R' : 'B'}</small>`;
+  tip.innerHTML = `<b>${info.title}</b>${info.desc}${extra}`;
+  tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(ev.clientX, innerWidth - r.width - 24) + 'px';
+  tip.style.top = Math.min(ev.clientY, innerHeight - r.height - 24) + 'px';
+}
+canvas.addEventListener('pointermove', ev => {
+  const obj = pick(ev);
+  hovered = obj;
+  canvas.style.cursor = obj ? 'pointer' : '';
+  if (obj) showTip(obj, ev); else tip.style.display = 'none';
+});
+canvas.addEventListener('pointerleave', () => { hovered = null; tip.style.display = 'none'; });
+canvas.addEventListener('pointerdown', ev => { downPos = [ev.clientX, ev.clientY]; });
+canvas.addEventListener('pointerup', ev => {
+  if (!downPos || Math.hypot(ev.clientX - downPos[0], ev.clientY - downPos[1]) > 5) return;
+  const obj = pick(ev); if (!obj) return;
+  const info = obj.userData.info;
+  if (info.kind === 'pin' && info.gpio !== null) {
+    if (!booted) { appendLine('W board not running — turn on USB power first', 'w'); return; }
+    pinState[info.gpio] = !pinState[info.gpio];
+    appLog('gpio', `GPIO${info.gpio} → ${pinState[info.gpio] ? 'HIGH (3.3 V)' : 'LOW (0 V)'}`);
+    showTip(obj, ev);
+  } else if (info.kind === 'button') pressButton(info.name);
+});
+
+function pressButton(name) {
+  const g = buttons[name]; if (!g) return;
+  g.userData.press = 1;
+  setTimeout(() => { g.userData.press = 0; }, 170);
+  if (name === 'RST') resetChip();
+  else if (booted) appLog('button', 'BOOT pressed → GPIO0 LOW (hold during reset for download mode)');
+  else if (powered) appendLine('W BOOT pressed while booting — GPIO0 low', 'w');
+}
+
+/* ------------------------------------------------------------------ */
+/*  Animation loop                                                     */
+/* ------------------------------------------------------------------ */
+const smooth = (a, b, k) => a + (b - a) * k;
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const tmpColor = new THREE.Color();
+
+function updateLeds(t) {
+  pwrMat.emissiveIntensity = powered ? 2.6 : 0;
+  let inten = 0;
+  tmpColor.setRGB(0, 0, 0);
+  if (powered && booted) {
+    const mode = ledModeEl.value;
+    if (mode === 'rainbow') { tmpColor.setHSL((t / 4500) % 1, 1, 0.5); inten = 1; }
+    else if (mode === 'breathe') { tmpColor.setRGB(0.6, 0.85, 1); inten = 0.15 + 0.85 * (0.5 + 0.5 * Math.sin(t / 700)); }
+  }
+  ledMat.emissive.copy(tmpColor); ledMat.emissiveIntensity = 2.4 * inten;
+  lensMat.emissive.copy(tmpColor); lensMat.emissiveIntensity = 0.35 * inten;
+  ledLight.color.copy(tmpColor); ledLight.intensity = 9 * inten;
+}
+function updatePins() {
+  for (const p of pinMeshes) {
+    const info = p.userData.info, m = p.material;
+    if (p === hovered) { m.emissive.setHex(0x37c6ff); m.emissiveIntensity = 1.3; }
+    else if (info.gpio !== null && pinState[info.gpio] && booted) { m.emissive.setHex(0x00e5a0); m.emissiveIntensity = 0.9; }
+    else m.emissiveIntensity = 0;
+  }
+}
+
+let last = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const k = 1 - Math.pow(0.001, dt);          // frame-rate independent easing
+
+  explodeCur = smooth(explodeCur, explodeTarget, k);
+  lidCur = smooth(lidCur, lidTarget, k);
+  for (const p of parts) p.position.y = p.userData.baseY + explodeCur * p.userData.explodeH;
+  can.position.y = canBaseY + lidCur * 9;
+  can.rotation.z = -lidCur * 0.14;
+  can.position.x = cx + lidCur * 1.2;
+
+  for (const name in buttons) {
+    const g = buttons[name];
+    const target = g.userData.pressY - g.userData.press * 0.6;
+    g.userData.plunger.position.y = smooth(g.userData.plunger.position.y, target, Math.min(1, k * 3));
+  }
+
+  if (camAnim) {
+    const a = camAnim, u = ease(Math.min(1, (now - a.start) / a.dur));
+    camera.position.lerpVectors(a.p0, a.p1, u);
+    controls.target.lerpVectors(a.t0, a.t1, u);
+    if (u >= 1) { controls.autoRotate = a.rot; camAnim = null; }
+  }
+
+  updateLeds(now);
+  updatePins();
+  controls.update();
+  composer.render();
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// Optional initial state via URL, e.g. ?view=ant&explode=0.6&lid=1&led=breathe&rotate=0
+{
+  const q = new URLSearchParams(location.search);
+  if (q.has('explode')) { explodeTarget = explodeCur = Math.min(1, Math.max(0, +q.get('explode') || 0)); $('explode').value = explodeTarget; }
+  if (q.get('lid') === '1') { lidTarget = lidCur = 1; $('lid').checked = true; }
+  if (q.has('led') && [...ledModeEl.options].some(o => o.value === q.get('led'))) ledModeEl.value = q.get('led');
+  if (q.get('rotate') === '0') { controls.autoRotate = false; $('rotate').checked = false; }
+  if (VIEWS[q.get('view')]) { const v = VIEWS[q.get('view')]; camera.position.set(...v.pos); controls.target.set(...v.tgt); }
+}
+
+// Go
+window.__esp32Ready = true;
+appendLine('esp32-3d simulator · connected to /dev/ttyUSB0 @ 115200', 'rom');
+boot();
+requestAnimationFrame(animate);
+const loading = $('loading');
+loading.style.opacity = '0';
+setTimeout(() => loading.remove(), 700);
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ESP32 LoRa Network · Communication Flow Explorer</title>
+<link rel="stylesheet" href="css/style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<!-- ------------------------------------------------------------ left column -->
+<div id="left">
+  <div id="title" class="panel">
+    <h1>ESP32 <span>LoRa</span> Network · Communication Flow</h1>
+    <p>Battery sensors, solar mesh repeaters and a Wi-Fi gateway on a 7 × 5 km city map. Send a report and follow it
+       hop by hop, or drag nodes around and watch links, routes and collisions change.</p>
+    <div class="legend">
+      <span><i class="k-gateway"></i>Gateway</span><span><i class="k-repeater"></i>Repeater</span><span><i class="k-sensor"></i>Sensor</span>
+      <span><i class="l-ok"></i>strong link</span><span><i class="l-warn"></i>marginal</span>
+    </div>
+  </div>
+
+  <div id="flow" class="panel">
+    <header>
+      <span class="h">Packet journey</span><b id="flowTxn">—</b><span class="sp"></span>
+      <label class="mini">Step <kbd>S</kbd></label><label class="switch"><input id="step" type="checkbox"><i></i></label>
+    </header>
+    <ol id="stages"></ol>
+    <div id="explain">
+      <h3 id="exTitle"></h3>
+      <div id="exText"></div>
+    </div>
+    <div class="flowbar">
+      <button id="next" class="primary" disabled>Next step <kbd>N</kbd></button>
+      <span id="stepHint"></span><span class="sp"></span>
+      <label class="mini">Follow auto</label><label class="switch sm"><input id="follow" type="checkbox" checked><i></i></label>
+    </div>
+    <div id="inspector">
+      <div class="ih">Frame on the air</div>
+      <div id="bytes"></div>
+      <div id="field"></div>
+      <div id="phy"></div>
+    </div>
+  </div>
+</div>
+
+<!-- -------------------------------------------------------------- controls -->
+<div id="controls" class="panel">
+  <h2>Traffic</h2>
+  <button id="send" class="primary">Send report from <b id="sendName">S3</b> <kbd>Space</kbd></button>
+  <button id="burst">Burst · every sensor at once <kbd>B</kbd></button>
+  <div class="row"><label>Automatic reports <kbd>A</kbd></label><label class="switch"><input id="auto" type="checkbox" checked><i></i></label></div>
+  <div class="row"><label>Report interval</label><span class="val" id="intVal">20 s</span></div>
+  <input id="interval" class="wide" type="range" min="5" max="90" step="1" value="20">
+
+  <h2>Network</h2>
+  <div class="row"><label>Topology</label>
+    <div class="seg" id="topo"><button data-v="star">Star</button><button data-v="mesh" class="on">Mesh</button></div>
+  </div>
+  <div class="row"><label>Environment</label>
+    <div class="seg" id="env"><button data-v="rural">Rural</button><button data-v="suburban">Suburb</button><button data-v="urban" class="on">Urban</button></div>
+  </div>
+  <div class="row"><label>Band</label>
+    <div class="seg" id="band"><button data-v="EU868" class="on">EU868</button><button data-v="US915">US915</button></div>
+  </div>
+
+  <h2>Radio</h2>
+  <div class="row"><label>Spreading factor</label><span class="val" id="sfVal">SF7</span></div>
+  <input id="sf" class="wide" type="range" min="7" max="12" step="1" value="7">
+  <div class="row"><label>Bandwidth</label>
+    <div class="seg" id="bw"><button data-v="125" class="on">125k</button><button data-v="250">250k</button><button data-v="500">500k</button></div>
+  </div>
+  <div class="row"><label>TX power</label><span class="val" id="pwrVal">14 dBm</span></div>
+  <input id="pwr" class="wide" type="range" min="2" max="20" step="1" value="14">
+  <div class="stats">
+    <div><span>Report ToA</span><b id="st-toa">–</b></div>
+    <div><span>ACK ToA</span><b id="st-ack">–</b></div>
+    <div><span>Bit rate</span><b id="st-dr">–</b></div>
+    <div><span>SNR floor</span><b id="st-snr">–</b></div>
+    <div><span>Range</span><b id="st-range">–</b></div>
+    <div><span>Reachable</span><b id="st-reach">–</b></div>
+    <div class="full" id="st-note"></div>
+  </div>
+
+  <h2>Playback</h2>
+  <div class="row"><button id="play" class="grow">Pause <kbd>P</kbd></button><span class="val" id="clock">0.00 s</span></div>
+  <div class="row"><label>Slow motion on air</label><span class="val" id="speedVal">0.15×</span></div>
+  <input id="speed" class="wide" type="range" min="0" max="1" step="0.001" value="0.515">
+  <div class="row"><label>Fast-forward idle time</label><label class="switch"><input id="skip" type="checkbox" checked><i></i></label></div>
+
+  <h2>View</h2>
+  <div class="row"><label>Links</label><label class="switch"><input id="links" type="checkbox" checked><i></i></label></div>
+  <div class="row"><label>Range of selected node</label><label class="switch"><input id="range" type="checkbox" checked><i></i></label></div>
+  <div class="views"><button data-view="iso">Iso <kbd>1</kbd></button><button data-view="top">Top <kbd>2</kbd></button><button data-view="low">Low <kbd>3</kbd></button></div>
+  <div class="views"><button id="addS">+ Sensor</button><button id="addR">+ Repeater</button><button id="reset">Reset</button></div>
+</div>
+
+<!-- ------------------------------------------------------------ node card -->
+<div id="card" class="panel hidden">
+  <header><b id="cName"></b><span id="cKind"></span><span class="sp"></span><button id="cClose">×</button></header>
+  <div class="stats" id="cStats"></div>
+  <div class="nbh">Neighbours (mean link)</div>
+  <ul id="cNb"></ul>
+  <div class="views two"><button id="cSend" class="primary">Send</button><button id="cPower">Power off</button><button id="cDel">Delete</button></div>
+</div>
+
+<!-- ------------------------------------------------------------ bottom dock -->
+<div id="dock" class="panel">
+  <header>
+    <div class="tabs"><button data-tab="timeline" class="on">Airtime timeline</button><button data-tab="log">Event log</button><button data-tab="dash">Dashboard (MQTT)</button></div>
+    <span class="sp"></span>
+    <span id="totals"></span>
+    <button id="zoomT" title="timeline window">window ×1</button>
+  </header>
+  <div class="tab" data-tab="timeline">
+    <canvas id="timeline"></canvas>
+    <div class="tlegend"><span class="k-data">report</span><span class="k-relay">relay</span><span class="k-ack">ACK</span>
+      <span class="m-ok">● decoded</span><span class="m-bad">✕ collision</span><span class="m-warn">○ too weak</span><span class="m-dim">| deaf (half-duplex)</span><span class="m-dup">– duplicate</span>
+      <span class="m-rx">▮ listening</span><span class="m-cad">▮ CAD</span></div>
+  </div>
+  <div class="tab hidden" data-tab="log"><pre id="log"></pre></div>
+  <div class="tab hidden" data-tab="dash"><div id="mqtt"></div><table id="dash"></table></div>
+</div>
+
+<div id="tip"></div>
+<div id="hint">drag a node to move it · click to select · double-click to send · drag empty space to orbit · wheel to zoom</div>
+<div id="loading">Loading three.js…</div>
+
+<script>
+  // Module scripts fail silently when the CDN is unreachable; surface a message instead.
+  setTimeout(() => { if (!window.__lora2Ready) document.getElementById('loading').textContent =
+    'Could not load three.js from unpkg.com, or the page was opened via file:// (serve it with `npx serve`).'; }, 15000);
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

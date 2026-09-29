@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ESP32 LoRa Node · 3D Bench Simulator</title>
+<link rel="stylesheet" href="css/style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<!-- ---------------------------------------------------------------- title -->
+<div id="title" class="panel">
+  <h1>ESP32 <span>LoRa</span> Node · Bench Simulator By @Alacritic_Super</h1>
+  <p>Custom 4-layer PCB with an ESP32-WROOM-32 and an SX1276 (RFM95W) radio under test.
+     Hover any part for details. Transmit packets, sweep the spreading factor, switch bands and power sources, and flip on the thermal camera.</p>
+  <div class="chips">
+    <span class="chip">ESP32-WROOM-32</span><span class="chip">SX1276 · 868/915 MHz</span><span class="chip">0.96" OLED</span>
+    <span class="chip">USB-C · LiPo + TP4056</span><span class="chip">SMA · 915 MHz duck</span><span class="chip">4-layer matte black</span>
+  </div>
+</div>
+
+<!-- -------------------------------------------------------------- controls -->
+<div id="controls" class="panel">
+  <h2>Radio</h2>
+  <button id="tx" class="primary">Transmit packet <kbd>T</kbd></button>
+  <div class="row"><label>Continuous TX <kbd>C</kbd></label><label class="switch"><input id="cont" type="checkbox"><i></i></label></div>
+
+  <div class="row"><label>Spreading factor</label><span class="val" id="sfVal">SF7</span></div>
+  <input id="sf" class="wide" type="range" min="7" max="12" step="1" value="7">
+
+  <div class="row"><label>Frequency band</label>
+    <div class="seg" id="freq"><button data-v="868">868 MHz</button><button data-v="915" class="on">915 MHz</button></div>
+  </div>
+  <div class="row"><label>Bandwidth</label>
+    <div class="seg" id="bw"><button data-v="125" class="on">125k</button><button data-v="250">250k</button><button data-v="500">500k</button></div>
+  </div>
+
+  <div class="row"><label>Link distance</label><span class="val" id="distVal">2.0 km</span></div>
+  <input id="dist" class="wide" type="range" min="0" max="1" step="0.001" value="0.525">
+
+  <div class="stats">
+    <div><span>Time on air</span><b id="st-toa">–</b></div>
+    <div><span>Data rate</span><b id="st-dr">–</b></div>
+    <div><span>Sensitivity</span><b id="st-sens">–</b></div>
+    <div><span>Est. range</span><b id="st-range">–</b></div>
+    <div><span>Link margin</span><b id="st-margin">–</b></div>
+    <div><span>Last RSSI / SNR</span><b id="st-rssi">–</b></div>
+    <div><span>Delivered</span><b id="st-pdr">–</b></div>
+    <div><span>3V3 rail</span><b id="st-cur">–</b></div>
+  </div>
+
+  <h2>Power</h2>
+  <div class="row"><label>Input</label>
+    <div class="seg" id="pwr"><button data-v="usb" class="on">USB-C 5 V</button><button data-v="lipo">LiPo</button></div>
+  </div>
+  <div class="row"><label>Regulator input</label><span class="val" id="st-vin">5.00 V</span></div>
+
+  <h2>View</h2>
+  <div class="row"><label>Thermal camera <kbd>H</kbd></label><label class="switch"><input id="thermal" type="checkbox"><i></i></label></div>
+  <div class="row"><label>Auto-rotate</label><label class="switch"><input id="rotate" type="checkbox"><i></i></label></div>
+  <div class="views">
+    <button data-view="iso" title="1">Iso</button><button data-view="top" title="2">Top</button>
+    <button data-view="bench" title="3">Bench</button><button data-view="ant" title="4">Antenna</button><button data-view="oled" title="5">OLED</button>
+  </div>
+  <button id="shot">Save screenshot</button>
+</div>
+
+<!-- ---------------------------------------------------------- serial log -->
+<div id="serial" class="panel">
+  <header><span class="dot" id="dot"></span> Serial monitor · 115200 baud <span class="sp"></span>
+    <button id="clear">clear</button><button id="collapse">hide</button></header>
+  <pre id="log"></pre>
+</div>
+
+<!-- ------------------------------------------------------- thermal legend -->
+<div id="thermalLegend" class="panel hidden">
+  <header>IR camera · emissivity 0.95</header>
+  <div class="bar"><span id="tl-lo">20 °C</span><i></i><span id="tl-hi">45 °C</span></div>
+  <div class="spots">
+    <div><span>ESP32</span><b id="tl-esp">–</b></div>
+    <div><span>AMS1117 LDO</span><b id="tl-ldo">–</b></div>
+    <div><span>SX1276 PA</span><b id="tl-sx">–</b></div>
+    <div><span>TP4056 charger</span><b id="tl-chg">–</b></div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="hint">drag to orbit · wheel to zoom · right-drag to pan · T transmit · H thermal · 1–5 views</div>
+<div id="loading">Loading three.js…</div>
+
+<script>
+  // Module scripts fail silently when the CDN is unreachable; surface a message instead.
+  setTimeout(() => { if (!window.__loraReady) document.getElementById('loading').textContent =
+    'Could not load three.js from unpkg.com, or the page was opened via file:// (serve it with `npx serve`).'; }, 15000);
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
